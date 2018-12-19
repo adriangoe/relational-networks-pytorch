@@ -26,6 +26,8 @@ def main(data_path, mlp, n_epochs):
     logger.info('Detected device is %s' % device)
 
     img_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.ToPILImage(mode=None),
         transforms.Resize(75),
         transforms.ToTensor(),
     ])
@@ -35,7 +37,7 @@ def main(data_path, mlp, n_epochs):
                                         transform=img_transform)
 
     train_loader = DataLoader(data_train, batch_size=64,
-                              shuffle=True, num_workers=4)
+                              shuffle=True, num_workers=1)
     logger.info('Loaded %s training datapoints' % len(data_train))
 
     data_test = util.NotSoCLEVRDataset(csv_file=data_path + 'data_test.csv',
@@ -43,7 +45,7 @@ def main(data_path, mlp, n_epochs):
                                        transform=img_transform)
 
     test_loader = DataLoader(data_test, batch_size=64,
-                             shuffle=False, num_workers=4)
+                             shuffle=False, num_workers=1)
     logger.info('Loaded %s test datapoints' % len(data_test))
 
     if mlp:
@@ -61,6 +63,7 @@ def main(data_path, mlp, n_epochs):
     freq = 300
 
     for epoch in range(n_epochs):
+        logger.info('Starting epoch %s out of %s' % (epoch, n_epochs))
         running_loss = 0.0
 
         for n_batch, batch in enumerate(train_loader):

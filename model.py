@@ -154,11 +154,11 @@ class RelationalNetwork(BaseModel):
             nn.Linear(500, 100),
             nn.ReLU(),
             nn.Linear(100, self.n_classes),
-            nn.LogSoftmax(),
+            nn.LogSoftmax(dim=1),
         )
 
-        # Assuming batch-size 64, but coordinates are flexible.
-        self.create_coordinates(64, 8)
+        #
+        self.create_coordinates(25, 8)
 
     def forward(self, img, qst):
         x = self.cnn(img)
@@ -207,7 +207,8 @@ class RelationalNetwork(BaseModel):
         x = self.g_theta(x)
 
         # Reshape back to access individual images
-        x = x.view(batch_size, d*d*d*d, 256)
+        # 2000 is output size of g_theta
+        x = x.view(batch_size, d*d*d*d, 2000)
         x = x.sum(1).squeeze()
 
         '''Function f
@@ -215,7 +216,7 @@ class RelationalNetwork(BaseModel):
         '''
         return self.f_phi(x)
 
-    def create_coordinates(self, batch_size, n_maps):
+    def create_coordinates(self, map_size, n_maps):
         '''We create an arbitrary coordinate for each
         of the d**2 k-dimensional cells in the d*d feature
         maps indicating their relative spatial position.
@@ -227,10 +228,10 @@ class RelationalNetwork(BaseModel):
         coord_tensor = torch.stack((x, y))
 
         # Create coordinates for each input
-        coord_tensor = coord_tensor.unsqueeze(0).repeat(batch_size, 1, 1, 1)
+        coord_tensor = coord_tensor.unsqueeze(0).repeat(map_size, 1, 1, 1)
 
         coord_tensor = coord_tensor.view(
-            batch_size, 2, n_maps*n_maps).permute(0, 2, 1)
+            map_size, 2, n_maps*n_maps).permute(0, 2, 1)
 
         self.coord_tensor = to_variable(coord_tensor)
         self.coord_tensor.requires_grad = False
@@ -245,7 +246,7 @@ class CNN_MLP(BaseModel):
         # Inferred from description in Appendix D of
         # original paper.
         self.mlp = nn.Sequential(
-            nn.Linear(self.cnn.size_out + self.question_size,
+            nn.Linear(self.cnn.size_out * 25 + self.question_size,
                       2000),
             nn.ReLU(),
             nn.Linear(2000, 2000),
@@ -261,7 +262,7 @@ class CNN_MLP(BaseModel):
             nn.Linear(500, 100),
             nn.ReLU(),
             nn.Linear(100, self.n_classes),
-            nn.LogSoftmax(),
+            nn.LogSoftmax(dim=1),
         )
 
     def forward(self, images, questions):
@@ -272,4 +273,6 @@ class CNN_MLP(BaseModel):
         # Add question to each image representation
         x = torch.cat((x, questions), 1)
 
-        return self.mlp(x)
+        x = self.mlp(x)
+        print x
+        return x

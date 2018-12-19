@@ -25,11 +25,9 @@ class NotSoCLEVRDataset(Dataset):
         '''
         self.questions = pd.read_csv(csv_file)
 
-        # Load all files into memory since we've seen
-        # errors when loading from h5 on GPU.
         f = h5py.File(img_file, 'r')
         group_key = list(f.keys())[0]
-        self.images = list(f[group_key])
+        self.images = f[group_key]
         self.transform = transform
 
     def __len__(self):
