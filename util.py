@@ -1,13 +1,15 @@
+# -*- coding: utf-8 -*-
 from torch.utils.data import Dataset
 import pandas as pd
 from ast import literal_eval
 from sklearn import preprocessing
 import h5py
+import numpy as np
 
 
 lb = preprocessing.LabelBinarizer()
 lb.fit(['right', 'blue', 'circle', 'left', 'bottom', 'yellow',
-         'square', 'green', 'red', 'top', 'gray'])
+        'square', 'green', 'red', 'top', 'gray'])
 
 
 class NotSoCLEVRDataset(Dataset):
@@ -23,9 +25,11 @@ class NotSoCLEVRDataset(Dataset):
         '''
         self.questions = pd.read_csv(csv_file)
 
-        # f = h5py.File(img_file, 'r')
-        # a_group_key = list(f.keys())[0]
-        self.images = img_file
+        # Load all files into memory since we've seen
+        # errors when loading from h5 on GPU.
+        f = h5py.File(img_file, 'r')
+        group_key = list(f.keys())[0]
+        self.images = list(f[group_key])
         self.transform = transform
 
     def __len__(self):
@@ -40,7 +44,8 @@ class NotSoCLEVRDataset(Dataset):
         sample = {'image': img,
                   'task': self.questions.iloc[idx, 1],
                   'question': literal_eval(self.questions.iloc[idx, 2]),
-                  'answer': lb.transform([self.questions.iloc[idx, 3]]).argmax(),
+                  'answer': lb.transform([self.questions.iloc[idx, 3]]
+                                         ).argmax(),
                   'type': self.questions.iloc[idx, 4]}
 
         return sample

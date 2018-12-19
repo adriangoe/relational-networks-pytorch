@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -23,26 +24,30 @@ class ConvolutionalInput(nn.Module):
         into a representation of contained objects.
         '''
         super(ConvolutionalInput, self).__init__()
-        size = 24
 
+        # (sizes as in Appendix D of original paper)
+        size0 = 32
         self.conv0 = nn.Sequential(
-            nn.Conv2d(3, size, 3, stride=2, padding=1),
-            nn.BatchNorm2d(size),
+            nn.Conv2d(3, size0, 3, stride=2, padding=1),
+            nn.BatchNorm2d(size0),
             nn.ReLU()
         )
+        size1 = 64
         self.conv1 = nn.Sequential(
-            nn.Conv2d(size, size, 3, stride=2, padding=1),
-            nn.BatchNorm2d(size),
+            nn.Conv2d(size0, size1, 3, stride=2, padding=1),
+            nn.BatchNorm2d(size1),
             nn.ReLU()
         )
+        size2 = 128
         self.conv2 = nn.Sequential(
-            nn.Conv2d(size, size, 3, stride=2, padding=1),
-            nn.BatchNorm2d(size),
+            nn.Conv2d(size1, size2, 3, stride=2, padding=1),
+            nn.BatchNorm2d(size2),
             nn.ReLU()
         )
+        self.size_out = 256
         self.conv3 = nn.Sequential(
-            nn.Conv2d(size, size, 3, stride=2, padding=1),
-            nn.BatchNorm2d(size),
+            nn.Conv2d(size2, self.size_out, 3, stride=2, padding=1),
+            nn.BatchNorm2d(self.size_out),
             nn.ReLU()
         )
 
@@ -77,46 +82,83 @@ class FullyConnected(nn.Module):
         return self.out(x)
 
 
-class RelationalNetwork(nn.Module):
+class BaseModel(nn.Module):
+    '''Base class for both the RN
+    and the MLP we use for comparisson.
+    Using a base-class ensures consistency of
+    learning-parameters and reduces complexity.
+    '''
+
     def __init__(self):
-        super(RelationalNetwork, self).__init__()
+        super(BaseModel, self).__init__()
 
         self.cnn = ConvolutionalInput()
+        self.question_size = 10
+        self.n_classes = 11
 
-        cnn_size = 24
-        question_size = 10
-        n_classes = 11
-        batch_size = 64
-        learning_rate = 0.0001
+        self.optimizer = optim.Adam(self.parameters(), lr=1e-4)
 
+    def train(self, images, questions, targets):
+        '''Takes a batch of training data
+        and performs backprop
+        '''
+        self.optimizer.zero_grad()
+
+        output = self(images, questions)
+        loss = F.cross_entropy(output, targets)
+        loss.backward()
+        self.optimizer.step()
+
+        return loss, output.data.max(1)[1]
+
+    def test(self, images, questions, targets):
+        '''Takes question + image pairs
+        and predicts the answer for each without
+        training the model.
+        '''
+        output = self(images, questions)
+        loss = F.cross_entropy(output, targets)
+
+        return loss, output.data.max(1)[1]
+
+
+class RelationalNetwork(BaseModel):
+    def __init__(self):
+        super(RelationalNetwork, self).__init__()
         # FUNCTION G:
         # input: object pair + question vector
         # output: flexible
         # (n_filters per object + coordinate_object) * 2 + question_vector
+        # (sizes as in Appendix D of original paper)
+        g_size = 2000
         self.g_theta = nn.Sequential(
-            nn.Linear((cnn_size + 2) * 2 + question_size,
-                      256),
+            nn.Linear((self.cnn.size_out + 2) * 2 + self.question_size,
+                      g_size),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(g_size, g_size),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(g_size, g_size),
             nn.ReLU(),
-            # nn.Linear(256, 256),
-            # nn.ReLU(),
+            nn.Linear(g_size, g_size),
+            nn.ReLU(),
         )
 
         # FUNCTION F:
         # takes element-wise sum of g-outputs
+        # (sizes as in Appendix D of original paper)
         self.f_phi = nn.Sequential(
-            nn.Linear(256, 256),
+            nn.Linear(g_size, 1000),
             nn.ReLU(),
+            nn.Linear(1000, 500),
+            nn.ReLU(),
+            nn.Linear(500, 100),
+            nn.ReLU(),
+            nn.Linear(100, self.n_classes),
+            nn.LogSoftmax(),
         )
 
-        self.out = FullyConnected(n_classes)
-
-        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
-
-        self.create_coordinates(batch_size, 8)
+        # Assuming batch-size 64, but coordinates are flexible.
+        self.create_coordinates(64, 8)
 
     def forward(self, img, qst):
         x = self.cnn(img)
@@ -169,13 +211,9 @@ class RelationalNetwork(nn.Module):
         x = x.sum(1).squeeze()
 
         '''Function f
-        applied to combined relations
+        applied to combined relations to get output
         '''
-        x = self.f_phi(x)
-
-        # Pass through final dense layers to map
-        # from inferred relation to output.
-        return self.out(x)
+        return self.f_phi(x)
 
     def create_coordinates(self, batch_size, n_maps):
         '''We create an arbitrary coordinate for each
@@ -189,8 +227,7 @@ class RelationalNetwork(nn.Module):
         coord_tensor = torch.stack((x, y))
 
         # Create coordinates for each input
-        coord_tensor = coord_tensor.unsqueeze(0
-            ).repeat(batch_size, 1, 1, 1)
+        coord_tensor = coord_tensor.unsqueeze(0).repeat(batch_size, 1, 1, 1)
 
         coord_tensor = coord_tensor.view(
             batch_size, 2, n_maps*n_maps).permute(0, 2, 1)
@@ -199,23 +236,40 @@ class RelationalNetwork(nn.Module):
         self.coord_tensor.requires_grad = False
 
 
-    def train(self, images, questions, targets):
-        '''Takes a batch of training data
-        and performs backprop
-        '''
-        self.optimizer.zero_grad()
+class CNN_MLP(BaseModel):
+    def __init__(self):
+        super(CNN_MLP, self).__init__()
 
-        output = self(images, questions)
-        loss = F.cross_entropy(output, targets)
-        loss.backward()
-        self.optimizer.step()
+        self.cnn = ConvolutionalInput()
 
-        return loss, output.data.max(1)[1]
+        # Inferred from description in Appendix D of
+        # original paper.
+        self.mlp = nn.Sequential(
+            nn.Linear(self.cnn.size_out + self.question_size,
+                      2000),
+            nn.ReLU(),
+            nn.Linear(2000, 2000),
+            nn.ReLU(),
+            nn.Linear(2000, 2000),
+            nn.ReLU(),
+            nn.Linear(2000, 2000),
+            nn.ReLU(),
+            nn.Linear(2000, 1000),
+            nn.ReLU(),
+            nn.Linear(1000, 500),
+            nn.ReLU(),
+            nn.Linear(500, 100),
+            nn.ReLU(),
+            nn.Linear(100, self.n_classes),
+            nn.LogSoftmax(),
+        )
 
-    def predict(self, images, questions):
-        '''Takes question + image pairs
-        and predicts the answer for each.
-        '''
-        output = self(images, questions)
+    def forward(self, images, questions):
+        x = self.cnn(images)
 
-        return output.data.max(1)[1]
+        # Flatten output
+        x = x.view(x.size(0), -1)
+        # Add question to each image representation
+        x = torch.cat((x, questions), 1)
+
+        return self.mlp(x)

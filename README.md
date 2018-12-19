@@ -8,6 +8,11 @@ For evaluation purposes we use an existing version of the Sort-Of-CLEVR dataset,
 
 ## Installation
 
+After clonging this repository make sure you have all necessary packages installed with
+
+```
+pip install -r requirements.txt
+```
 
 ## Usage
 
