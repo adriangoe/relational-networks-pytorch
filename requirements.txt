@@ -1,6 +1,5 @@
 torch
 torchvision
-numpy
 click
 logging
 h5py

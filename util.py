@@ -4,7 +4,6 @@ import pandas as pd
 from ast import literal_eval
 from sklearn import preprocessing
 import h5py
-import numpy as np
 
 
 lb = preprocessing.LabelBinarizer()
