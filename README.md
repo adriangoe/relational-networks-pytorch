@@ -16,6 +16,10 @@ $ source activate pytorch_p27
 $ make requirements
 ```
 
+## Data
+
+The data was acquired from https://www.kaggle.com/gruberpatrick/sortofclevr. You can either download it there and copy it to `data/` or use the `make load_data` command if you have the kaggle CLI set-up.
+
 ## Usage
 
 You can directly use the `src/main.py` file and the commands specified there or start the scripts with `make train` and `make train_mlp` for the two network variants.
