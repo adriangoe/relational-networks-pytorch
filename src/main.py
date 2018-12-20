@@ -5,10 +5,11 @@ import torch
 from torchvision import transforms
 import model
 import util
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 import numpy as np
 import time
+
 
 @click.command()
 @click.argument('data_path', type=click.Path(exists=True))
