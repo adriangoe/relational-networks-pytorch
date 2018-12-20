@@ -96,12 +96,14 @@ class BaseModel(nn.Module):
         self.question_size = 10
         self.n_classes = 11
 
-        self.optimizer = optim.Adam(self.parameters(), lr=1e-4)
+        self.optimizer = None
 
     def train(self, images, questions, targets):
         '''Takes a batch of training data
         and performs backprop
         '''
+        if not self.optimizer:
+            self.setup_optimizer()
         self.optimizer.zero_grad()
 
         output = self(images, questions)
@@ -120,6 +122,12 @@ class BaseModel(nn.Module):
         loss = F.cross_entropy(output, targets)
 
         return loss, output.data.max(1)[1]
+
+    def setup_optimizer(self):
+        '''Optimizer should be created when all parameters
+        are ready and model is moved to the CUDA device
+        '''
+        self.optimizer = optim.Adam(self.parameters(), lr=1e-4)
 
 
 class RelationalNetwork(BaseModel):
@@ -274,5 +282,4 @@ class CNN_MLP(BaseModel):
         x = torch.cat((x, questions), 1)
 
         x = self.mlp(x)
-        print x
         return x

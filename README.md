@@ -8,14 +8,17 @@ For evaluation purposes we use an existing version of the Sort-Of-CLEVR dataset,
 
 ## Installation
 
-After clonging this repository make sure you have all necessary packages installed with
+After cloneing this repository you can either use your own pytorch environment or use the following simple setup script for a new environment:
 
 ```
-pip install -r requirements.txt
+$ make create_environment
+$ source activate pytorch_p27
+$ make requirements
 ```
 
 ## Usage
 
+You can directly use the `src/main.py` file and the commands specified there or start the scripts with `make train` and `make train_mlp` for the two network variants.
 
 ## Evaluation
 

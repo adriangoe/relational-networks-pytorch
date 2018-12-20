@@ -1,5 +1,13 @@
+# compile self
+-e .
+
+# external packages
 torch
 torchvision
 click
 logging
 h5py
+numpy
+pandas
+scikit-learn
+matplotlib

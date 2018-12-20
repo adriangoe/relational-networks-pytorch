@@ -41,8 +41,9 @@ class NotSoCLEVRDataset(Dataset):
         sample = {'image': img,
                   'task': self.questions.iloc[idx, 1],
                   'question': literal_eval(self.questions.iloc[idx, 2]),
-                  'answer': lb.transform([self.questions.iloc[idx, 3]]
+                  'target': lb.transform([self.questions.iloc[idx, 3]]
                                          ).argmax(),
+                  'answer': self.questions.iloc[idx, 3],
                   'type': self.questions.iloc[idx, 4]}
 
         return sample

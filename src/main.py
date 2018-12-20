@@ -5,9 +5,10 @@ import torch
 from torchvision import transforms
 import model
 import util
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
-
+import numpy as np
+import time
 
 @click.command()
 @click.argument('data_path', type=click.Path(exists=True))
@@ -21,6 +22,7 @@ def main(data_path, mlp, n_epochs):
                (this is for comparisson purposes only)
         - n_epochs: (int) how many epochs to run
     '''
+    name = time.strftime("%Y%m%d-%H%M%S") + ('_mlp' if mlp else '_rn')
     logger = logging.getLogger(__name__)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     logger.info('Detected device is %s' % device)
@@ -60,16 +62,16 @@ def main(data_path, mlp, n_epochs):
     test_loss_history = []
     rel_acc_history = []
     non_rel_acc_history = []
-    freq = 300
+    freq = 500
 
     for epoch in range(n_epochs):
-        logger.info('Starting epoch %s out of %s' % (epoch, n_epochs))
+        logger.info('Starting epoch %s out of %s' % (epoch + 1, n_epochs))
         running_loss = 0.0
 
         for n_batch, batch in enumerate(train_loader):
             images = batch['image'].to(device)
             tasks = torch.stack(batch['question']).t().float().to(device)
-            target = batch['answer'].to(device)
+            target = batch['target'].to(device)
             loss, preds = model_.train(images, tasks, target)
 
             running_loss += loss.item()
@@ -88,19 +90,19 @@ def main(data_path, mlp, n_epochs):
                         images = batch['image'].to(device)
                         tasks = torch.stack(batch['question']
                                             ).t().float().to(device)
-                        target = batch['answer'].to(device)
+                        target = batch['target'].to(device)
                         types = batch['type']
 
                         loss, preds = model_.test(images, tasks, target)
                         c = (preds == target).squeeze()
                         test_loss += loss.item()
 
-                        rel_correct += c[types == 1
+                        rel_correct += c[types == 0
                                          ].sum().cpu().data.tolist()
-                        non_rel_correct += c[types == 0
+                        non_rel_correct += c[types == 1
                                              ].sum().cpu().data.tolist()
-                        rel_total += c[types == 1].size()[0]
-                        non_rel_total += c[types == 0].size()[0]
+                        rel_total += c[types == 0].size()[0]
+                        non_rel_total += c[types == 1].size()[0]
 
                 # Keep track of performance metrics
                 logger.info('[%d, %5d] train loss: %.3f, test loss: %.3f' %
@@ -115,10 +117,22 @@ def main(data_path, mlp, n_epochs):
                 test_loss_history.append(test_loss / len(test_loader))
                 running_loss = 0.0
 
-        plt.plot(train_loss_history)
-        plt.plot(test_loss_history)
-        plt.show()
-        return
+                # Save plot after every step to allow early aborting
+                # if more progress is made, this is overwritten
+                plt.plot(train_loss_history, label='training loss')
+                plt.plot(test_loss_history, label='test loss')
+                plt.plot(rel_acc_history, label='rel acc')
+                plt.plot(non_rel_acc_history, label='non rel acc')
+                plt.legend()
+                plt.savefig('outputs/%s.png' % name)
+                np.save('outputs/%s.npy' % name, np.array([train_loss_history,
+                                                           test_loss_history,
+                                                           rel_acc_history,
+                                                           non_rel_acc_history])
+                        )
+        torch.save(model_.state_dict(), 'outputs/%s.pk' % name)
+
+    return
 
 
 if __name__ == '__main__':
