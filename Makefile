@@ -1,4 +1,4 @@
-l.PHONY: clean lint requirements train train_mlp load_data
+l.PHONY: clean lint requirements train train_mlp train_lstm load_data
 
 PROJECT_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 PROJECT_NAME = pytorch_p27
@@ -27,6 +27,10 @@ train_mlp:
 ## Trains the Relational Network
 train:
 	$(PYTHON_INTERPRETER) -m src.main data/
+
+## Trains the Relational Network with LSTM question encoding
+train_lstm:
+	$(PYTHON_INTERPRETER) -m src.main data/ --lstm
 
 ## Delete all compiled Python files
 clean:

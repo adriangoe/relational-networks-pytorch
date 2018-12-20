@@ -14,13 +14,16 @@ import time
 @click.command()
 @click.argument('data_path', type=click.Path(exists=True))
 @click.option('--mlp/--no-mlp', default=False)
+@click.option('--lstm/--no-lstm', default=False)
 @click.argument('n_epochs', type=int, default=20)
-def main(data_path, mlp, n_epochs):
+def main(data_path, mlp, lstm, n_epochs):
     '''Function to train and evaluate the model on the provided
     dataset.
     Args:
         - mlp: (bool) whether to use the MLP instead of the RN model
                (this is for comparisson purposes only)
+        - lstm: (bool) whether to use an LSTM on raw sentences or the
+                prepared encodings
         - n_epochs: (int) how many epochs to run
     '''
     name = time.strftime("%Y%m%d-%H%M%S") + ('_mlp' if mlp else '_rn')
@@ -51,10 +54,19 @@ def main(data_path, mlp, n_epochs):
                              shuffle=False, num_workers=1)
     logger.info('Loaded %s test datapoints' % len(data_test))
 
-    if mlp:
-        model_ = model.CNN_MLP()
+    if lstm:
+        # Count vocabulary and prepare word encodings
+        text_util = util.TextUtil(data_path + 'data_train.csv', 'question')
+        logger.info('Prepared LSTM vocabulary with %s words'
+                    % text_util.vocab_size)
+        vocab = text_util.vocab_size
     else:
-        model_ = model.RelationalNetwork()
+        vocab = None
+
+    if mlp:
+        model_ = model.CNN_MLP(lstm=lstm, vocab=vocab)
+    else:
+        model_ = model.RelationalNetwork(lstm=lstm, vocab=vocab)
     model_.to(device)
     logger.info('%s model loaded' % ('RelationalNetwork'
                                      if not mlp else 'MLP'))
@@ -71,7 +83,15 @@ def main(data_path, mlp, n_epochs):
 
         for n_batch, batch in enumerate(train_loader):
             images = batch['image'].to(device)
-            tasks = torch.stack(batch['question']).t().float().to(device)
+            if not lstm:
+                tasks = torch.stack(batch['question']
+                                    ).t().float().to(device)
+            else:
+                # Ideally this would be computed only once
+                # rather than every epoch.
+                tasks = torch.stack([text_util.string_to_vec(s)
+                                     for s in batch['task']]
+                                    ).to(device)
             target = batch['target'].to(device)
             loss, preds = model_.train(images, tasks, target)
 
@@ -89,8 +109,16 @@ def main(data_path, mlp, n_epochs):
                     # Get test set performance
                     for data in test_loader:
                         images = batch['image'].to(device)
-                        tasks = torch.stack(batch['question']
-                                            ).t().float().to(device)
+                        if not lstm:
+                            tasks = torch.stack(batch['question']
+                                                ).t().float().to(device)
+                        else:
+                            # Ideally this would be computed only once
+                            # rather than every epoch.
+                            tasks = torch.stack([text_util.string_to_vec(s)
+                                                for s in batch['task']]
+                                                ).to(device)
+
                         target = batch['target'].to(device)
                         types = batch['type']
 
@@ -126,6 +154,7 @@ def main(data_path, mlp, n_epochs):
                 plt.plot(non_rel_acc_history, label='non rel acc')
                 plt.legend()
                 plt.savefig('outputs/%s.png' % name)
+                plt.close()
                 np.save('outputs/%s.npy' % name, np.array([train_loss_history,
                                                            test_loss_history,
                                                            rel_acc_history,

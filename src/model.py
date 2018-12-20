@@ -61,27 +61,6 @@ class ConvolutionalInput(nn.Module):
         return self.conv3(x)
 
 
-class FullyConnected(nn.Module):
-
-    def __init__(self, n_out):
-        super(FullyConnected, self).__init__()
-        n_hidden = 256
-
-        self.fc0 = nn.Sequential(
-            nn.Linear(256, n_hidden),
-            nn.ReLU(),
-            nn.Dropout()
-        )
-        self.out = nn.Sequential(
-            nn.Linear(n_hidden, n_out),
-            nn.LogSoftmax()
-        )
-
-    def forward(self, x):
-        x = self.fc0(x)
-        return self.out(x)
-
-
 class BaseModel(nn.Module):
     '''Base class for both the RN
     and the MLP we use for comparisson.
@@ -89,12 +68,23 @@ class BaseModel(nn.Module):
     learning-parameters and reduces complexity.
     '''
 
-    def __init__(self):
+    def __init__(self, lstm=False, vocab=0):
         super(BaseModel, self).__init__()
 
         self.cnn = ConvolutionalInput()
         self.question_size = 10
         self.n_classes = 11
+        self.lstm = lstm
+
+        if self.lstm:
+            # This is used to analyze the questions at input time.
+            self.question_size = 20
+            size_embedding = 10
+            self.embedding = nn.Embedding(num_embeddings=vocab+1,
+                                          embedding_dim=size_embedding)
+            self.lstm_layer = nn.LSTM(input_size=size_embedding,
+                                      hidden_size=self.question_size,
+                                      batch_first=True)
 
         self.optimizer = None
 
@@ -131,23 +121,27 @@ class BaseModel(nn.Module):
 
 
 class RelationalNetwork(BaseModel):
-    def __init__(self):
-        super(RelationalNetwork, self).__init__()
+    def __init__(self, **args):
+        super(RelationalNetwork, self).__init__(**args)
         # FUNCTION G:
         # input: object pair + question vector
         # output: flexible
         # (n_filters per object + coordinate_object) * 2 + question_vector
         # (sizes as in Appendix D of original paper)
-        g_size = 2000
+        self.g_size = 2000
         self.g_theta = nn.Sequential(
             nn.Linear((self.cnn.size_out + 2) * 2 + self.question_size,
-                      g_size),
+                      self.g_size),
+            nn.BatchNorm1d(self.g_size),
             nn.ReLU(),
-            nn.Linear(g_size, g_size),
+            nn.Linear(self.g_size, self.g_size),
+            # nn.BatchNorm1d(self.g_size),
             nn.ReLU(),
-            nn.Linear(g_size, g_size),
+            nn.Linear(self.g_size, self.g_size),
+            # nn.BatchNorm1d(self.g_size),
             nn.ReLU(),
-            nn.Linear(g_size, g_size),
+            nn.Linear(self.g_size, self.g_size),
+            # nn.BatchNorm1d(self.g_size),
             nn.ReLU(),
         )
 
@@ -155,21 +149,32 @@ class RelationalNetwork(BaseModel):
         # takes element-wise sum of g-outputs
         # (sizes as in Appendix D of original paper)
         self.f_phi = nn.Sequential(
-            nn.Linear(g_size, 1000),
+            nn.Linear(self.g_size, 1000),
+            # nn.Dropout(),
             nn.ReLU(),
             nn.Linear(1000, 500),
+            # nn.Dropout(),
             nn.ReLU(),
             nn.Linear(500, 100),
+            # nn.Dropout(),
             nn.ReLU(),
             nn.Linear(100, self.n_classes),
+            # nn.Dropout(),
             nn.LogSoftmax(dim=1),
         )
 
         #
         self.create_coordinates(25, 8)
 
-    def forward(self, img, qst):
-        x = self.cnn(img)
+    def forward(self, images, questions):
+        x = self.cnn(images)
+
+        if self.lstm:
+            # Get hidden state as the question
+            # embedding
+            questions = self.embedding(questions)
+            _, hidden = self.lstm_layer(questions)
+            questions = hidden[0][0]
 
         '''Function g
         applied to pairs of object represenations
@@ -177,7 +182,6 @@ class RelationalNetwork(BaseModel):
 
         # batch_size, representation_size, number_of_cells
         batch_size, k, d, _ = x.size()
-        # 64, 24, 8, 8
 
         # Stack all cells of represenations
         # to get (batch_size, cells, representation)
@@ -192,10 +196,10 @@ class RelationalNetwork(BaseModel):
         # 64, 64, 26
 
         # Create question vector for each cell
-        q_len = qst.size()[1]
-        qst = torch.unsqueeze(qst, 1)
-        qst = qst.repeat(1, d*d, 1)
-        qst = torch.unsqueeze(qst, 2)
+        q_len = questions.size()[1]
+        questions = torch.unsqueeze(questions, 1)
+        questions = questions.repeat(1, d*d, 1)
+        questions = torch.unsqueeze(questions, 2)
 
         # Combine all pairs of cells
         x_i = torch.unsqueeze(x, 1)
@@ -203,7 +207,7 @@ class RelationalNetwork(BaseModel):
         x_i = x_i.repeat(1, d*d, 1, 1)
         x_j = torch.unsqueeze(x, 2)
         # Inject the question with the second object
-        x_j = torch.cat([x_j, qst], 3)
+        x_j = torch.cat([x_j, questions], 3)
         # We repeat each cell, n_cells times along axis 2
         x_j = x_j.repeat(1, 1, d*d, 1)
 
@@ -215,8 +219,7 @@ class RelationalNetwork(BaseModel):
         x = self.g_theta(x)
 
         # Reshape back to access individual images
-        # 2000 is output size of g_theta
-        x = x.view(batch_size, d*d*d*d, 2000)
+        x = x.view(batch_size, d*d*d*d, self.g_size)
         x = x.sum(1).squeeze()
 
         '''Function f
@@ -246,8 +249,8 @@ class RelationalNetwork(BaseModel):
 
 
 class CNN_MLP(BaseModel):
-    def __init__(self):
-        super(CNN_MLP, self).__init__()
+    def __init__(self, **args):
+        super(CNN_MLP, self).__init__(**args)
 
         self.cnn = ConvolutionalInput()
 
@@ -275,6 +278,13 @@ class CNN_MLP(BaseModel):
 
     def forward(self, images, questions):
         x = self.cnn(images)
+
+        if self.lstm:
+            # Get hidden state as the question
+            # embedding
+            questions = self.embedding(questions)
+            _, hidden = self.lstm_layer(questions)
+            questions = hidden[0][0]
 
         # Flatten output
         x = x.view(x.size(0), -1)

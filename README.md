@@ -24,5 +24,5 @@ The data was acquired from https://www.kaggle.com/gruberpatrick/sortofclevr. You
 
 You can directly use the `src/main.py` file and the commands specified there or start the scripts with `make train` and `make train_mlp` for the two network variants.
 
-## Evaluation
+`make train_lstm` is also provided to run the same architecture but without the pre-encoded questions. To run the CNN+MLP version with lstm please manually run (`python -m src.main --mlp --lstm`).
 

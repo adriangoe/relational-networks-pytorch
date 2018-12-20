@@ -4,6 +4,8 @@ import pandas as pd
 from ast import literal_eval
 from sklearn import preprocessing
 import h5py
+import torch
+import numpy as np
 
 
 lb = preprocessing.LabelBinarizer()
@@ -47,3 +49,27 @@ class NotSoCLEVRDataset(Dataset):
                   'type': self.questions.iloc[idx, 4]}
 
         return sample
+
+
+class TextUtil():
+    '''To process text-sentences for use in an LSTM
+    '''
+
+    def __init__(self, text_csv, text_column):
+        self.vocab = set(' '.join(pd.read_csv(text_csv)[text_column].tolist()
+                                  ).split(' '))
+        self.max_len = max([len(s.split(' ')) for s in
+                            pd.read_csv(text_csv)[text_column].tolist()])
+        self.vocab_size = len(self.vocab)
+        self.word_to_ix = {word: i for i, word
+                           in enumerate(self.vocab)}
+
+    def string_to_vec(self, string):
+        '''Turn a sentence into a vector
+        of vocabulary indeces.
+        '''
+        # set all to stop-word
+        out = np.ones((self.max_len)) * self.vocab_size
+        for i, w in enumerate(string.split(' ')):
+            out[i] = self.word_to_ix[w]
+        return torch.tensor(out, dtype=torch.long)
