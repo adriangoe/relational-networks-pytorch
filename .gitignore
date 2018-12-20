@@ -107,3 +107,8 @@ venv.bak/
 # data-files
 data/*.csv
 data/*.h5
+
+# outputs
+outputs/*.npy
+outputs/*.pk
+outputs/*.png
