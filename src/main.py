@@ -3,8 +3,8 @@ import click
 import logging
 import torch
 from torchvision import transforms
-import model
-import util
+from src import model
+from src import util
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 import numpy as np
