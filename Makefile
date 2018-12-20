@@ -22,15 +22,15 @@ load_data:
 
 ## Trains the MLP-CNN Baseline mode
 train_mlp:
-	$(PYTHON_INTERPRETER) -m src.main data/ --mlp |& tee -a outputs/log.txt
+	$(PYTHON_INTERPRETER) -m src.main data/ --mlp &> outputs/log.txt
 
 ## Trains the Relational Network
 train:
-	$(PYTHON_INTERPRETER) -m src.main data/ |& tee -a outputs/log.txt
+	$(PYTHON_INTERPRETER) -m src.main data/ &> outputs/log.txt
 
 ## Trains the Relational Network with LSTM question encoding
 train_lstm:
-	$(PYTHON_INTERPRETER) -m src.main data/ --lstm |& tee -a outputs/log.txt
+	$(PYTHON_INTERPRETER) -m src.main data/ --lstm &> outputs/log.txt
 
 ## Delete all compiled Python files
 clean:
